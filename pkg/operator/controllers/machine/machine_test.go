@@ -90,6 +90,30 @@ func TestWorkerReplicas(t *testing.T) {
 }
 
 func TestMachineValid(t *testing.T) {
+	providerSpec := &machinev1beta1.AzureMachineProviderSpec{
+		Image: machinev1beta1.Image{
+			Publisher: "azureopenshift",
+			Offer:     "aro4",
+			SKU:       "aro_499",
+			Version:   "499.99.30000610",
+		},
+		Location:             "neversayneverland",
+		NetworkResourceGroup: "networkRG",
+		OSDisk: machinev1beta1.OSDisk{
+			DiskSizeGB: int32(9001),
+			OSType:     "Linux",
+			ManagedDisk: machinev1beta1.ManagedDiskParameters{
+				StorageAccountType: "Premium_LRS",
+			},
+		},
+		PublicIP:           false,
+		PublicLoadBalancer: "",
+		ResourceGroup:      "myRG",
+		VMSize:             "Standard_D8s_v3",
+		Vnet:               "myVnet",
+		Zone:               to.StringPtr("2"),
+	}
+
 	tests := []struct {
 		name     string
 		maocli   *machinefake.Clientset
@@ -105,11 +129,7 @@ func TestMachineValid(t *testing.T) {
 		{
 			name: "provider spec present",
 			machine: *fakeMachine0(&runtime.RawExtension{
-				Object: &machinev1beta1.AzureMachineProviderSpec{
-					TypeMeta: metav1.TypeMeta{
-						Kind: "some kind",
-					},
-				},
+				Object: providerSpec,
 			}),
 			wantErr: nil,
 		},
