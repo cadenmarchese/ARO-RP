@@ -175,9 +175,10 @@ const (
 type MaintenanceTask string
 
 const (
-	MaintenanceTaskEverything MaintenanceTask = "Everything"
-	MaintenanceTaskOperator   MaintenanceTask = "OperatorUpdate"
-	MaintenanceTaskRenewCerts MaintenanceTask = "CertificatesRenewal"
+	MaintenanceTaskEverything   MaintenanceTask = "Everything"
+	MaintenanceTaskOperator     MaintenanceTask = "OperatorUpdate"
+	MaintenanceTaskRenewCerts   MaintenanceTask = "CertificatesRenewal"
+	MaintenanceTaskEtcdRecovery MaintenanceTask = "EtcdRecovery"
 )
 
 // Cluster-scoped flags
