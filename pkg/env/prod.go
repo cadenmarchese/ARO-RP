@@ -126,10 +126,8 @@ func newProd(ctx context.Context, log *logrus.Entry) (*prod, error) {
 		}
 	}
 
-	msiAuthorizer, err := p.NewMSIAuthorizer(MSIContextRP, p.Environment().ResourceManagerEndpoint)
-	if err != nil {
-		return nil, err
-	}
+	// because Aks has multiple MSI's attached to the VMs, we have to set this env variable so that the MSI authorizer knows which MSI to use (agentpool)
+	os.Setenv("AZURE_CLIENT_ID", p.AksMsiClientID())
 
 	msiKVAuthorizer, err := p.NewMSIAuthorizer(MSIContextRP, p.Environment().ResourceIdentifiers.KeyVault)
 	if err != nil {
@@ -142,12 +140,6 @@ func newProd(ctx context.Context, log *logrus.Entry) (*prod, error) {
 	}
 
 	p.serviceKeyvault = keyvault.NewManager(msiKVAuthorizer, serviceKeyvaultURI)
-
-	resourceSkusClient := compute.NewResourceSkusClient(p.Environment(), p.SubscriptionID(), msiAuthorizer)
-	err = p.populateVMSkus(ctx, resourceSkusClient)
-	if err != nil {
-		return nil, err
-	}
 
 	p.fpCertificateRefresher = newCertificateRefresher(log, 1*time.Hour, p.serviceKeyvault, RPFirstPartySecretName)
 	err = p.fpCertificateRefresher.Start(ctx)
@@ -174,6 +166,17 @@ func newProd(ctx context.Context, log *logrus.Entry) (*prod, error) {
 
 	p.clusterGenevaLoggingPrivateKey = clusterGenevaLoggingPrivateKey
 	p.clusterGenevaLoggingCertificate = clusterGenevaLoggingCertificates[0]
+
+	localFPAuthorizer, err := p.FPAuthorizer(p.TenantID(), p.Environment().ResourceManagerEndpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	resourceSkusClient := compute.NewResourceSkusClient(p.Environment(), p.SubscriptionID(), localFPAuthorizer)
+	err = p.populateVMSkus(ctx, resourceSkusClient)
+	if err != nil {
+		return nil, err
+	}
 
 	var acrDataDomain string
 	if p.ACRResourceID() != "" { // TODO: ugh!
