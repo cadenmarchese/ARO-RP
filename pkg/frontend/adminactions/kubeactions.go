@@ -149,6 +149,7 @@ func (k *kubeActions) KubeCreateOrUpdate(ctx context.Context, o *unstructured.Un
 	return err
 }
 
+// TODO modify to accept deletion parameters
 func (k *kubeActions) KubeDelete(ctx context.Context, groupKind, namespace, name string, force bool) error {
 	gvr, err := k.gvrResolver.Resolve(groupKind, "")
 	if err != nil {

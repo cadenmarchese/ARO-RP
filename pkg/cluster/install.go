@@ -39,7 +39,6 @@ func (m *manager) adminUpdate() []steps.Step {
 	isEverything := task == api.MaintenanceTaskEverything || task == ""
 	isOperator := task == api.MaintenanceTaskOperator
 	isRenewCerts := task == api.MaintenanceTaskRenewCerts
-	isEtcdRecovery := task == api.MaintenanceTaskEtcdRecovery
 
 	// Generic fix-up or setup actions that are fairly safe to always take, and
 	// don't require a running cluster
@@ -61,10 +60,6 @@ func (m *manager) adminUpdate() []steps.Step {
 			steps.Action(m.fixSSH),
 			//steps.Action(m.removePrivateDNSZone), // TODO(mj): re-enable once we communicate this out
 		)
-	}
-
-	if isEtcdRecovery {
-		steps.Action(m.fixEtcd)
 	}
 
 	if isEverything || isRenewCerts {

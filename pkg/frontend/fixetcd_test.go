@@ -1,4 +1,4 @@
-package cluster
+package frontend
 
 // Copyright (c) Microsoft Corporation.
 // Licensed under the Apache License 2.0.
@@ -7,6 +7,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/Azure/ARO-RP/pkg/api"
+	"github.com/Azure/ARO-RP/pkg/metrics/noop"
+	mock_env "github.com/Azure/ARO-RP/pkg/util/mocks/env"
+	testlog "github.com/Azure/ARO-RP/test/util/log"
+	"github.com/golang/mock/gomock"
+	"github.com/sirupsen/logrus"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,9 +20,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	securityv1 "github.com/openshift/api/security/v1"
-	operatorfake "github.com/openshift/client-go/operator/clientset/versioned/fake"
 	securityclient "github.com/openshift/client-go/security/clientset/versioned"
-	"github.com/sirupsen/logrus"
 	"github.com/ugorji/go/codec"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,8 +29,6 @@ import (
 	fakekubecli "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	ktesting "k8s.io/client-go/testing"
-
-	"github.com/Azure/ARO-RP/pkg/api"
 )
 
 const (
@@ -37,15 +39,28 @@ const (
 )
 
 func TestFixEtcd(t *testing.T) {
+	ctx := context.WithValue(context.Background(), ctxKey, "TRUE")
+	log := logrus.NewEntry(logrus.StandardLogger())
+	//auditHook, auditEntry := testlog.NewAudit()
+	_, auditEntry := testlog.NewAudit()
+	controller := gomock.NewController(t)
+	_env := mock_env.NewMockInterface(controller)
+
+	f, err := NewFrontend(ctx, auditEntry, log, _env, nil, nil, nil, nil, nil, api.APIs, &noop.Noop{}, nil, nil, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, tt := range []struct {
 		name    string
 		wantErr string
 		pods    *corev1.PodList
 		status  int
 		scc     *securityv1.SecurityContextConstraints
+		doc     *api.OpenShiftClusterDocument
 	}{
 		{
 			name: "pass: find degraded member",
+			doc:  &api.OpenShiftClusterDocument{},
 			scc: &securityv1.SecurityContextConstraints{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "SecurityContextConstraints",
@@ -59,6 +74,7 @@ func TestFixEtcd(t *testing.T) {
 		},
 		{
 			name:    "Fail: Could not find resource",
+			doc:     &api.OpenShiftClusterDocument{},
 			wantErr: "the server could not find the requested resource (get securitycontextconstraints.security.openshift.io privileged)",
 			scc: &securityv1.SecurityContextConstraints{
 				TypeMeta: metav1.TypeMeta{
@@ -70,6 +86,7 @@ func TestFixEtcd(t *testing.T) {
 		},
 		{
 			name:    "fail: get peer pods",
+			doc:     &api.OpenShiftClusterDocument{},
 			wantErr: "degradedEtcd is empty, unable to remediate etcd deployment",
 			scc: &securityv1.SecurityContextConstraints{
 				TypeMeta: metav1.TypeMeta{
@@ -91,7 +108,6 @@ func TestFixEtcd(t *testing.T) {
 			},
 		},
 	} {
-		ctx := context.WithValue(context.Background(), ctxKey, "TRUE")
 		kubecli, err := newFakeKubecli(ctx, tt.pods, tt.scc)
 		if err != nil {
 			t.Fatal(err)
@@ -150,24 +166,6 @@ func TestFixEtcd(t *testing.T) {
 		})
 		_, err = securitycli.SecurityV1().SecurityContextConstraints().Create(ctx, tt.scc, metav1.CreateOptions{})
 
-		m := &manager{
-			log: logrus.NewEntry(logrus.StandardLogger()),
-			doc: &api.OpenShiftClusterDocument{
-				OpenShiftCluster: &api.OpenShiftCluster{
-					Name: testEtcds,
-					Properties: api.OpenShiftClusterProperties{
-						ArchitectureVersion: api.ArchitectureVersionV2,
-						ClusterProfile: api.ClusterProfile{
-							ResourceGroupID: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg",
-						},
-						InfraID: "infra",
-					},
-				},
-			},
-			securitycli:   securitycli,
-			kubernetescli: kubecli,
-			operatorcli:   operatorfake.NewSimpleClientset(newEtcds()),
-		}
 		wr := ktesting.DefaultWatchReactor(kubecli.InvokesWatch(ktesting.NewWatchAction(kschema.GroupVersionResource{
 			Group:    "",
 			Version:  "v1",
@@ -193,8 +191,13 @@ func TestFixEtcd(t *testing.T) {
 			return nil
 		})
 
+		kubeActions, err := f.kubeActionsFactory(log, f.env, tt.doc.OpenShiftCluster)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		t.Run(tt.name, func(t *testing.T) {
-			err = m.fixEtcd(ctx)
+			err = f.fixEtcd(ctx, log, _env, tt.doc, kubeActions)
 			if err != nil && err.Error() != tt.wantErr ||
 				err == nil && tt.wantErr != "" {
 				t.Error(fmt.Errorf("\n%s\n !=\n%s", err.Error(), tt.wantErr))
