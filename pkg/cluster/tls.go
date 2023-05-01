@@ -22,7 +22,7 @@ import (
 )
 
 func (m *manager) createCertificates(ctx context.Context) error {
-	if m.env.FeatureIsSet(env.FeatureDisableSignedCertificates) {
+	if !m.env.FeatureIsSet(env.FeatureDisableSignedCertificates) { // don't use signed certificates in a prod-like RP on AKS
 		return nil
 	}
 
@@ -121,7 +121,7 @@ func (m *manager) ensureSecret(ctx context.Context, secrets corev1client.SecretI
 }
 
 func (m *manager) configureAPIServerCertificate(ctx context.Context) error {
-	if m.env.FeatureIsSet(env.FeatureDisableSignedCertificates) {
+	if !m.env.FeatureIsSet(env.FeatureDisableSignedCertificates) { // don't use signed certificates in a prod-like RP on AKS
 		return nil
 	}
 
@@ -164,7 +164,7 @@ func (m *manager) configureAPIServerCertificate(ctx context.Context) error {
 }
 
 func (m *manager) configureIngressCertificate(ctx context.Context) error {
-	if m.env.FeatureIsSet(env.FeatureDisableSignedCertificates) {
+	if !m.env.FeatureIsSet(env.FeatureDisableSignedCertificates) { // don't use signed certificates in a prod-like RP on AKS
 		return nil
 	}
 

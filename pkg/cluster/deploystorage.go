@@ -19,7 +19,6 @@ import (
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 
 	"github.com/Azure/ARO-RP/pkg/api"
-	"github.com/Azure/ARO-RP/pkg/env"
 	"github.com/Azure/ARO-RP/pkg/util/arm"
 	"github.com/Azure/ARO-RP/pkg/util/stringutils"
 	"github.com/Azure/ARO-RP/pkg/util/subnet"
@@ -164,10 +163,6 @@ func (m *manager) deployStorageTemplate(ctx context.Context) error {
 		Schema:         "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
 		ContentVersion: "1.0.0.0",
 		Resources:      resources,
-	}
-
-	if !m.env.FeatureIsSet(env.FeatureDisableDenyAssignments) {
-		t.Resources = append(t.Resources, m.denyAssignment())
 	}
 
 	return arm.DeployTemplate(ctx, m.log, m.deployments, resourceGroup, "storage", t, nil)

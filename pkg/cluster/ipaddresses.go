@@ -291,7 +291,7 @@ func (m *manager) createAPIServerPrivateEndpoint(ctx context.Context) error {
 				// TODO: in the future we will need multiple vnets for our PEs.
 				// It will be necessary to decide the vnet for a cluster's PE
 				// somewhere around here.
-				ID: to.StringPtr("/subscriptions/" + m.env.SubscriptionID() + "/resourceGroups/" + m.env.ResourceGroup() + "/providers/Microsoft.Network/virtualNetworks/rp-pe-vnet-001/subnets/rp-pe-subnet"),
+				ID: to.StringPtr("/subscriptions/" + m.env.SubscriptionID() + "/resourceGroups/" + strings.TrimSuffix(m.env.ResourceGroup(), "-aks1") + "/providers/Microsoft.Network/virtualNetworks/rp-pe-vnet-001/subnets/rp-pe-subnet"),
 			},
 			ManualPrivateLinkServiceConnections: &[]mgmtnetwork.PrivateLinkServiceConnection{
 				{

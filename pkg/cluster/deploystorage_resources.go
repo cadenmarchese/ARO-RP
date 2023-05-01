@@ -88,11 +88,11 @@ func (m *manager) storageAccount(name, region string, encrypted bool) *arm.Resou
 			Action:                   mgmtstorage.Allow,
 		},
 		{
-			VirtualNetworkResourceID: to.StringPtr("/subscriptions/" + m.env.SubscriptionID() + "/resourceGroups/" + m.env.ResourceGroup() + "/providers/Microsoft.Network/virtualNetworks/rp-pe-vnet-001/subnets/rp-pe-subnet"),
+			VirtualNetworkResourceID: to.StringPtr("/subscriptions/" + m.env.SubscriptionID() + "/resourceGroups/" + strings.TrimSuffix(m.env.ResourceGroup(), "-aks1") + "/providers/Microsoft.Network/virtualNetworks/rp-pe-vnet-001/subnets/rp-pe-subnet"),
 			Action:                   mgmtstorage.Allow,
 		},
 		{
-			VirtualNetworkResourceID: to.StringPtr("/subscriptions/" + m.env.SubscriptionID() + "/resourceGroups/" + m.env.ResourceGroup() + "/providers/Microsoft.Network/virtualNetworks/rp-vnet/subnets/rp-subnet"),
+			VirtualNetworkResourceID: to.StringPtr("/subscriptions/" + m.env.SubscriptionID() + "/resourceGroups/" + strings.TrimSuffix(m.env.ResourceGroup(), "-aks1") + "/providers/Microsoft.Network/virtualNetworks/rp-vnet/subnets/rp-subnet"),
 			Action:                   mgmtstorage.Allow,
 		},
 	}

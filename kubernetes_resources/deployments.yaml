@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aro-rp
+  namespace: aro-rp
+  labels:
+    app: aro-rp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aro-rp
+  template:
+    metadata:
+      labels:
+        app: aro-rp
+    spec:
+      containers:
+      - name: aro
+        image: marchesaro.azurecr.io/aro:may25_2
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 443
+        resources:
+          limits:
+            memory: "2G"
+        command: ["/bin/sh", "-c", "env && aro rp"]
+        envFrom:
+        - configMapRef:
+            name: rp-config
+        volumeMounts:
+          - mountPath: /etc/aro-rp/admin-ca-bundle.pem
+            name: ca-bundles
+            subPath: admin-api-ca-bundle
+            readOnly: true
+      volumes:
+        - name: ca-bundles
+          secret:
+            secretName: ca-bundles

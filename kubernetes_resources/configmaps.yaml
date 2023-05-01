@@ -1,0 +1,22 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: rp-config
+  namespace: aro-rp
+data:
+  # required env vars populated from dev-config.yaml
+  ACR_RESOURCE_ID: '/subscriptions/fe16a035-e540-4ab7-80d9-373fa9a3d6ae/resourceGroups/marches-global/providers/Microsoft.ContainerRegistry/registries/marchesaro'
+  ADMIN_API_CLIENT_CERT_COMMON_NAME: dev-client
+  ARM_API_CLIENT_CERT_COMMON_NAME: dev-client
+  MDM_ACCOUNT: AzureRedHatOpenShiftRP
+  AZURE_FP_CLIENT_ID: 09698a54-6d82-4cc1-9f2c-1d8e81347a5e # fpClientId (from dev-config.yaml)
+  DOMAIN_NAME: marches-rp.osadev.cloud
+  CLUSTER_MDSD_CONFIG_VERSION: '4.3'
+  CLUSTER_MDSD_ACCOUNT: ARORPLogs
+  CLUSTER_MDSD_NAMESPACE: AROClusterLogs
+  GATEWAY_DOMAINS: 'eastus-shared.ppe.warm.ingest.monitor.core.windows.net,gcs.ppe.monitoring.core.windows.net,gsm1890023205eh.servicebus.windows.net,gsm1890023205xt.blob.core.windows.net,gsm584263398eh.servicebus.windows.net,gsm584263398xt.blob.core.windows.net,gsm779889026eh.servicebus.windows.net,gsm779889026xt.blob.core.windows.net,monitoringagentbvt2.blob.core.windows.net,qos.ppe.warm.ingest.monitor.core.windows.net,test1.diagnostics.monitoring.core.windows.net'
+  GATEWAY_RESOURCEGROUP: marches-gwy-eastus
+  KEYVAULT_PREFIX: marches-aro-eastus
+  MDSD_ENVIRONMENT: Test
+  MDM_NAMESPACE: Test
+  DATABASE_ACCOUNT_NAME: marches-aro-eastus
