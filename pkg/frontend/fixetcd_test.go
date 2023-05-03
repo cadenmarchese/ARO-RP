@@ -7,20 +7,16 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/Azure/ARO-RP/pkg/api"
-	"github.com/Azure/ARO-RP/pkg/metrics/noop"
-	mock_env "github.com/Azure/ARO-RP/pkg/util/mocks/env"
-	testlog "github.com/Azure/ARO-RP/test/util/log"
-	"github.com/golang/mock/gomock"
-	"github.com/sirupsen/logrus"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/Azure/go-autorest/autorest/to"
+	"github.com/golang/mock/gomock"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	securityv1 "github.com/openshift/api/security/v1"
 	securityclient "github.com/openshift/client-go/security/clientset/versioned"
+	"github.com/sirupsen/logrus"
 	"github.com/ugorji/go/codec"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +25,11 @@ import (
 	fakekubecli "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
 	ktesting "k8s.io/client-go/testing"
+
+	"github.com/Azure/ARO-RP/pkg/api"
+	"github.com/Azure/ARO-RP/pkg/metrics/noop"
+	mock_env "github.com/Azure/ARO-RP/pkg/util/mocks/env"
+	testlog "github.com/Azure/ARO-RP/test/util/log"
 )
 
 const (

@@ -9,15 +9,10 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/Azure/ARO-RP/pkg/frontend/adminactions"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/Azure/ARO-RP/pkg/api"
-	"github.com/Azure/ARO-RP/pkg/env"
-	"github.com/Azure/ARO-RP/pkg/util/restconfig"
 	"github.com/Azure/go-autorest/autorest/to"
 	operatorv1 "github.com/openshift/api/operator/v1"
 	securityv1 "github.com/openshift/api/security/v1"
@@ -30,8 +25,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	kruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/Azure/ARO-RP/pkg/api"
+	"github.com/Azure/ARO-RP/pkg/env"
+	"github.com/Azure/ARO-RP/pkg/frontend/adminactions"
+	"github.com/Azure/ARO-RP/pkg/util/restconfig"
 )
 
 const (
@@ -91,7 +92,7 @@ func (f *frontend) fixEtcd(ctx context.Context, log *logrus.Entry, env env.Inter
 	}
 	log.Infof("Found degraded endpoint: %v", de)
 
-	err = backupEtcdData(ctx, log, de.Node, kubeActions)
+	err = backupEtcdData(ctx, log, doc.OpenShiftCluster.Name, de.Node, kubeActions)
 	if err != nil {
 		return err
 	}
@@ -425,77 +426,95 @@ func createPrivilegedServiceAccount(ctx context.Context, log *logrus.Entry, name
 	return scc, nil
 }
 
-func backupEtcdData(ctx context.Context, log *logrus.Entry, node string, kubeActions adminactions.KubeActions) error {
-
-	log.Infof("Creating job %s", jobNameDataBackup)
-	err := kubeActions.KubeCreateOrUpdate(ctx, &unstructured.Unstructured{
-		Object: map[string]interface{}{jobNameDataBackup: &batchv1.Job{
-			TypeMeta: metav1.TypeMeta{},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      jobNameDataBackup,
-				Namespace: nameSpaceEtcds,
-				Labels:    map[string]string{"app": jobNameDataBackup},
-			},
-			Spec: batchv1.JobSpec{
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      jobNameDataBackup,
-						Namespace: nameSpaceEtcds,
-						Labels:    map[string]string{"app": jobNameDataBackup},
-					},
-					Spec: corev1.PodSpec{
-						RestartPolicy: corev1.RestartPolicyOnFailure,
-						NodeName:      node,
-						Containers: []corev1.Container{
-							{
-								Name:  "backup",
-								Image: image,
-								Command: []string{
-									"chroot",
-									"/host",
-									"/bin/bash",
-									"-c",
-									backupOrFixEtcd,
-								},
-								VolumeMounts: []corev1.VolumeMount{
-									{
-										Name:      "host",
-										MountPath: "/host",
-										ReadOnly:  false,
+func backupEtcdData(ctx context.Context, log *logrus.Entry, cluster, node string, kubeActions adminactions.KubeActions) error {
+	jobDataBackup := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			jobNameDataBackup: &batchv1.Job{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Job",
+					APIVersion: "batch/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      jobNameDataBackup,
+					Namespace: nameSpaceEtcds,
+					Labels:    map[string]string{"app": jobNameDataBackup},
+				},
+				Spec: batchv1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      jobNameDataBackup,
+							Namespace: nameSpaceEtcds,
+							Labels:    map[string]string{"app": jobNameDataBackup},
+						},
+						Spec: corev1.PodSpec{
+							RestartPolicy: corev1.RestartPolicyOnFailure,
+							NodeName:      node,
+							Containers: []corev1.Container{
+								{
+									Name:  "backup",
+									Image: image,
+									Command: []string{
+										"chroot",
+										"/host",
+										"/bin/bash",
+										"-c",
+										backupOrFixEtcd,
 									},
-								},
-								SecurityContext: &corev1.SecurityContext{
-									Capabilities: &corev1.Capabilities{
-										Add: []corev1.Capability{"SYS_CHROOT"},
+									VolumeMounts: []corev1.VolumeMount{
+										{
+											Name:      "host",
+											MountPath: "/host",
+											ReadOnly:  false,
+										},
 									},
-									Privileged: to.BoolPtr(true),
-								},
-								Env: []corev1.EnvVar{
-									{
-										Name:  "BACKUP",
-										Value: "true",
+									SecurityContext: &corev1.SecurityContext{
+										Capabilities: &corev1.Capabilities{
+											Add: []corev1.Capability{"SYS_CHROOT"},
+										},
+										Privileged: to.BoolPtr(true),
+									},
+									Env: []corev1.EnvVar{
+										{
+											Name:  "BACKUP",
+											Value: "true",
+										},
 									},
 								},
 							},
-						},
-						Volumes: []corev1.Volume{
-							{
-								Name: "host",
-								VolumeSource: corev1.VolumeSource{
-									HostPath: &corev1.HostPathVolumeSource{
-										Path: "/",
+							Volumes: []corev1.Volume{
+								{
+									Name: "host",
+									VolumeSource: corev1.VolumeSource{
+										HostPath: &corev1.HostPathVolumeSource{
+											Path: "/",
+										},
 									},
 								},
 							},
 						},
 					},
 				},
-			},
-		}},
-	})
+			}},
+	}
+
+	//jobDataBackup.SetGroupVersionKind(
+	//	kschema.GroupVersionKind{
+	//		Group:   "batch",
+	//		Kind:    "Job",
+	//		Version: "v1",
+	//	})
+	jobDataBackup.SetKind("Job")
+	jobDataBackup.SetAPIVersion("batch/v1")
+	jobDataBackup.SetName(jobNameDataBackup)
+	log.Infof("Setting job %s cluster name to: %s", jobNameDataBackup, cluster)
+	jobDataBackup.SetClusterName(cluster)
+
+	log.Infof("Creating job %s", jobNameDataBackup)
+	err := kubeActions.KubeCreateOrUpdate(ctx, jobDataBackup)
 	if err != nil {
 		return err
 	}
+	log.Infof("Job %s has been created", jobNameDataBackup)
 
 	timeout := adjustTimeout(ctx, log)
 	log.Infof("Waiting for %s", jobNameDataBackup)
@@ -507,6 +526,7 @@ func backupEtcdData(ctx context.Context, log *logrus.Entry, node string, kubeAct
 	}
 
 	log.Infof("Deleting job %s now", jobNameDataBackup)
+	// TODO modify kube actions delete to allow delete options to be passed
 	//propPolicy := metav1.DeletePropagationBackground
 	//return batch.Jobs(nameSpaceEtcds).Delete(ctx, jobNameDataBackup, metav1.DeleteOptions{
 	//	PropagationPolicy: &propPolicy,
