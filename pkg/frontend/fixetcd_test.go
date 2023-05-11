@@ -198,7 +198,7 @@ func TestFixEtcd(t *testing.T) {
 		}
 
 		t.Run(tt.name, func(t *testing.T) {
-			err = f.fixEtcd(ctx, log, _env, tt.doc, kubeActions)
+			err = f.fixEtcd(ctx, log, _env, tt.doc, kubeActions, "cluster", nameSpaceEtcds, "Etcd")
 			if err != nil && err.Error() != tt.wantErr ||
 				err == nil && tt.wantErr != "" {
 				t.Error(fmt.Errorf("\n%s\n !=\n%s", err.Error(), tt.wantErr))
