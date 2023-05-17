@@ -28,21 +28,8 @@ func (f *frontend) postAdminOpenShiftClusterEtcdRecovery(w http.ResponseWriter, 
 }
 
 func (f *frontend) _postAdminOpenShiftClusterEtcdRecovery(ctx context.Context, r *http.Request, log *logrus.Entry) error {
-	var err error
-	resType, resName, resGroupName := chi.URLParam(r, "resourceType"), chi.URLParam(r, "resourceName"), chi.URLParam(r, "resourceGroupName")
-
-	groupKind, namespace, name := r.URL.Query().Get("kind"), r.URL.Query().Get("namespace"), r.URL.Query().Get("name")
-	//groupKind, namespace := r.URL.Query().Get("kind"), r.URL.Query().Get("namespace")
-
-	//if groupKind != "Etcd" {
-	//	return api.NewCloudError(http.StatusUnprocessableEntity, api.CloudErrorCodeForbidden, "", "The Group Kind '%s' is not valid", groupKind)
-	//}
-
-	//if namespace != nameSpaceEtcds {
-	//	return api.NewCloudError(http.StatusUnprocessableEntity, api.CloudErrorCodeForbidden, "", "The Namespace '%s' is not valid", namespace)
-	//}
-
 	resourceID := strings.TrimPrefix(r.URL.Path, "/admin")
+	resType, resName, resGroupName := chi.URLParam(r, "resourceType"), chi.URLParam(r, "resourceName"), chi.URLParam(r, "resourceGroupName")
 
 	doc, err := f.dbOpenShiftClusters.Get(ctx, resourceID)
 	switch {
@@ -51,20 +38,12 @@ func (f *frontend) _postAdminOpenShiftClusterEtcdRecovery(ctx context.Context, r
 	case err != nil:
 		return err
 	}
+
+	// why instantiate kubeactions here instead of in the fixEtcd code?
 	kubeActions, err := f.kubeActionsFactory(log, f.env, doc.OpenShiftCluster)
 	if err != nil {
 		return err
 	}
 
-	gvr, err := kubeActions.ResolveGVR(groupKind)
-	if err != nil {
-		return err
-	}
-
-	err = validateAdminKubernetesObjects(r.Method, gvr, namespace, name)
-	if err != nil {
-		return err
-	}
-
-	return f.fixEtcd(ctx, log, f.env, doc, kubeActions, name, namespace, groupKind)
+	return f.fixEtcd(ctx, log, f.env, doc, kubeActions, "Etcd")
 }

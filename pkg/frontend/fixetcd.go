@@ -57,7 +57,7 @@ type degradedEtcd struct {
 	OldIP string
 }
 
-func (f *frontend) fixEtcd(ctx context.Context, log *logrus.Entry, env env.Interface, doc *api.OpenShiftClusterDocument, kubeActions adminactions.KubeActions, name, namespace, groupKind string) error {
+func (f *frontend) fixEtcd(ctx context.Context, log *logrus.Entry, env env.Interface, doc *api.OpenShiftClusterDocument, kubeActions adminactions.KubeActions, groupKind string) error {
 	restConfig, err := restconfig.RestConfig(env, doc.OpenShiftCluster)
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func (f *frontend) fixEtcd(ctx context.Context, log *logrus.Entry, env env.Inter
 		return err
 	}
 
-	rawEtcd, err := kubeActions.KubeGet(ctx, groupKind, "", name)
+	rawEtcd, err := kubeActions.KubeGet(ctx, groupKind, "", "cluster")
 	if err != nil {
 		return err
 	}
@@ -506,6 +506,7 @@ func backupEtcdData(ctx context.Context, log *logrus.Entry, cluster, node string
 	jobDataBackup.SetKind("Job")
 	jobDataBackup.SetAPIVersion("batch/v1")
 	jobDataBackup.SetName(jobNameDataBackup)
+	jobDataBackup.SetNamespace(nameSpaceEtcds)
 	log.Infof("Setting job %s cluster name to: %s", jobNameDataBackup, cluster)
 	jobDataBackup.SetClusterName(cluster)
 

@@ -174,8 +174,8 @@ func (f *frontend) _postAdminKubernetesObjects(ctx context.Context, r *http.Requ
 	}
 
 	gvr, err := k.ResolveGVR(obj.GetKind())
-	if err != nil {
-		return err
+	if err == nil {
+		return api.NewCloudError(http.StatusAccepted, api.CloudErrorCodeInternalServerError, "", "the gvr: %s", gvr)
 	}
 
 	err = validateAdminKubernetesObjectsNonCustomer(r.Method, gvr, obj.GetNamespace(), obj.GetName())
