@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -21,7 +20,6 @@ import (
 	securityv1client "github.com/openshift/client-go/security/clientset/versioned/typed/security/v1"
 	"github.com/sirupsen/logrus"
 	"github.com/ugorji/go/codec"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -242,68 +240,64 @@ func fixPeers(ctx context.Context, log *logrus.Entry, de *degradedEtcd, pods *co
 		err = kubeActions.KubeDelete(ctx, "ClusterRoleBinding", nameSpaceEtcds, serviceAccountName, false)
 	}()
 
-	log.Infof("Creating job %s", jobNameFixPeers)
-	err = kubeActions.KubeCreateOrUpdate(ctx, &unstructured.Unstructured{
+	jobFixPeers := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			jobNameFixPeers: &batchv1.Job{
-				TypeMeta: metav1.TypeMeta{},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      jobNameFixPeers,
-					Namespace: nameSpaceEtcds,
-					Labels:    map[string]string{"app": jobNameDataBackup},
-				},
-				Spec: batchv1.JobSpec{
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      jobNameFixPeers,
-							Namespace: nameSpaceEtcds,
-							Labels:    map[string]string{"app": jobNameDataBackup},
-						},
-						Spec: corev1.PodSpec{
-							RestartPolicy:      corev1.RestartPolicyOnFailure,
-							ServiceAccountName: serviceAccountName,
-							Containers: []corev1.Container{
-								{
-									Name:  "backup",
-									Image: image,
-									Command: []string{
-										"/bin/bash",
-										"-cx",
-										backupOrFixEtcd,
+			"objectMeta": map[string]interface{}{
+				"name":      jobNameFixPeers,
+				"namespace": nameSpaceEtcds,
+				"labels":    map[string]string{"app": jobNameDataBackup},
+			},
+			"spec": map[string]interface{}{
+				"template": map[string]interface{}{
+					"objectMeta": map[string]interface{}{
+						"name":      jobNameFixPeers,
+						"namespace": nameSpaceEtcds,
+						"labels":    map[string]string{"app": jobNameDataBackup},
+					},
+					"spec": map[string]interface{}{
+						"restartPolicy":      corev1.RestartPolicyOnFailure,
+						"serviceAccountName": serviceAccountName,
+						"containers": []corev1.Container{
+							{
+								Name:  "backup",
+								Image: image,
+								Command: []string{
+									"/bin/bash",
+									"-cx",
+									backupOrFixEtcd,
+								},
+								SecurityContext: &corev1.SecurityContext{
+									Privileged: to.BoolPtr(true),
+								},
+								Env: []corev1.EnvVar{
+									{
+										Name:  "PEER_PODS",
+										Value: peerPods,
 									},
-									SecurityContext: &corev1.SecurityContext{
-										Privileged: to.BoolPtr(true),
+									{
+										Name:  "DEGRADED_NODE",
+										Value: de.Node,
 									},
-									Env: []corev1.EnvVar{
-										{
-											Name:  "PEER_PODS",
-											Value: peerPods,
-										},
-										{
-											Name:  "DEGRADED_NODE",
-											Value: de.Node,
-										},
-										{
-											Name:  "FIX_PEERS",
-											Value: "true",
-										},
+									{
+										Name:  "FIX_PEERS",
+										Value: "true",
 									},
-									VolumeMounts: []corev1.VolumeMount{
-										{
-											Name:      "host",
-											MountPath: "/host",
-											ReadOnly:  false,
-										},
+								},
+								VolumeMounts: []corev1.VolumeMount{
+									{
+										Name:      "host",
+										MountPath: "/host",
+										ReadOnly:  false,
 									},
 								},
 							},
-							Volumes: []corev1.Volume{
-								{
-									Name: "host",
-									VolumeSource: corev1.VolumeSource{
-										HostPath: &corev1.HostPathVolumeSource{
-											Path: "/",
-										},
+						},
+						"volumes": []corev1.Volume{
+							{
+								Name: "host",
+								VolumeSource: corev1.VolumeSource{
+									HostPath: &corev1.HostPathVolumeSource{
+										Path: "/",
 									},
 								},
 							},
@@ -312,10 +306,24 @@ func fixPeers(ctx context.Context, log *logrus.Entry, de *degradedEtcd, pods *co
 				},
 			},
 		},
-	})
+	}
 	if err != nil {
 		return err
 	}
+
+	jobFixPeers.SetKind("Job")
+	jobFixPeers.SetAPIVersion("batch/v1")
+	jobFixPeers.SetName(jobNameFixPeers)
+	jobFixPeers.SetNamespace(nameSpaceEtcds)
+	log.Infof("Setting job %s cluster name to: %s", jobFixPeers, cluster)
+	jobFixPeers.SetClusterName(cluster)
+
+	log.Infof("Creating job %s", jobFixPeers)
+	err = kubeActions.KubeCreateOrUpdate(ctx, jobFixPeers)
+	if err != nil {
+		return err
+	}
+	log.Infof("Job %s has been created", jobFixPeers)
 
 	timeout := adjustTimeout(ctx, log)
 	log.Infof("Waiting for %s", jobNameFixPeers)
@@ -429,80 +437,69 @@ func createPrivilegedServiceAccount(ctx context.Context, log *logrus.Entry, name
 func backupEtcdData(ctx context.Context, log *logrus.Entry, cluster, node string, kubeActions adminactions.KubeActions) error {
 	jobDataBackup := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			jobNameDataBackup: &batchv1.Job{
-				TypeMeta: metav1.TypeMeta{
-					Kind:       "Job",
-					APIVersion: "batch/v1",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      jobNameDataBackup,
-					Namespace: nameSpaceEtcds,
-					Labels:    map[string]string{"app": jobNameDataBackup},
-				},
-				Spec: batchv1.JobSpec{
-					Template: corev1.PodTemplateSpec{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      jobNameDataBackup,
-							Namespace: nameSpaceEtcds,
-							Labels:    map[string]string{"app": jobNameDataBackup},
-						},
-						Spec: corev1.PodSpec{
-							RestartPolicy: corev1.RestartPolicyOnFailure,
-							NodeName:      node,
-							Containers: []corev1.Container{
-								{
-									Name:  "backup",
-									Image: image,
-									Command: []string{
-										"chroot",
-										"/host",
-										"/bin/bash",
-										"-c",
-										backupOrFixEtcd,
+			"objectMeta": map[string]interface{}{
+				"name":      jobNameDataBackup,
+				"namespace": nameSpaceEtcds,
+				"labels":    map[string]string{"app": jobNameDataBackup},
+			},
+			"spec": map[string]interface{}{
+				"template": map[string]interface{}{
+					"objectMeta": map[string]interface{}{
+						"name":      jobNameDataBackup,
+						"namespace": nameSpaceEtcds,
+						"labels":    map[string]string{"app": jobNameDataBackup},
+					},
+					"spec": map[string]interface{}{
+						"restartPolicy": corev1.RestartPolicyOnFailure,
+						"nodeName":      node,
+						"containers": []corev1.Container{
+							{
+								Name:  "backup",
+								Image: image,
+								Command: []string{
+									"chroot",
+									"/host",
+									"/bin/bash",
+									"-c",
+									backupOrFixEtcd,
+								},
+								VolumeMounts: []corev1.VolumeMount{
+									{
+										Name:      "host",
+										MountPath: "/host",
+										ReadOnly:  false,
 									},
-									VolumeMounts: []corev1.VolumeMount{
-										{
-											Name:      "host",
-											MountPath: "/host",
-											ReadOnly:  false,
-										},
+								},
+								SecurityContext: &corev1.SecurityContext{
+									Capabilities: &corev1.Capabilities{
+										Add: []corev1.Capability{"SYS_CHROOT"},
 									},
-									SecurityContext: &corev1.SecurityContext{
-										Capabilities: &corev1.Capabilities{
-											Add: []corev1.Capability{"SYS_CHROOT"},
-										},
-										Privileged: to.BoolPtr(true),
-									},
-									Env: []corev1.EnvVar{
-										{
-											Name:  "BACKUP",
-											Value: "true",
-										},
+									Privileged: to.BoolPtr(true),
+								},
+								Env: []corev1.EnvVar{
+									{
+										Name:  "BACKUP",
+										Value: "true",
 									},
 								},
 							},
-							Volumes: []corev1.Volume{
-								{
-									Name: "host",
-									VolumeSource: corev1.VolumeSource{
-										HostPath: &corev1.HostPathVolumeSource{
-											Path: "/",
-										},
+						},
+						"volumes": []corev1.Volume{
+							{
+								Name: "host",
+								VolumeSource: corev1.VolumeSource{
+									HostPath: &corev1.HostPathVolumeSource{
+										Path: "/",
 									},
 								},
 							},
 						},
 					},
 				},
-			}},
+			},
+		},
 	}
 
-	//jobDataBackup.SetGroupVersionKind(
-	//	kschema.GroupVersionKind{
-	//		Group:   "batch",
-	//		Kind:    "Job",
-	//		Version: "v1",
-	//	})
 	jobDataBackup.SetKind("Job")
 	jobDataBackup.SetAPIVersion("batch/v1")
 	jobDataBackup.SetName(jobNameDataBackup)
@@ -559,7 +556,7 @@ func comparePodEnvToIP(log *logrus.Entry, pods *corev1.PodList) (*degradedEtcd, 
 			}
 		}
 	}
-	return &degradedEtcd{}, errors.New("degradedEtcd is empty, unable to remediate etcd deployment")
+	return &degradedEtcd{}, nil
 }
 
 func ipFromEnv(containers []corev1.Container, podName string) string {
