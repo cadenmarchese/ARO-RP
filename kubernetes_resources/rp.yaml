@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: aro
-        image: marchesaro.azurecr.io/aro:may25_2
+        image: marchesaro.azurecr.io/aro:581147f
         imagePullPolicy: Always
         ports:
         - containerPort: 443

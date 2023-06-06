@@ -9,6 +9,7 @@ data:
   ADMIN_API_CLIENT_CERT_COMMON_NAME: dev-client
   ARM_API_CLIENT_CERT_COMMON_NAME: dev-client
   MDM_ACCOUNT: AzureRedHatOpenShiftRP
+  CLUSTER_MDM_ACCOUNT: AzureRedHatOpenShiftCluster
   AZURE_FP_CLIENT_ID: 09698a54-6d82-4cc1-9f2c-1d8e81347a5e # fpClientId (from dev-config.yaml)
   DOMAIN_NAME: marches-rp.osadev.cloud
   CLUSTER_MDSD_CONFIG_VERSION: '4.3'
@@ -19,4 +20,5 @@ data:
   KEYVAULT_PREFIX: marches-aro-eastus
   MDSD_ENVIRONMENT: Test
   MDM_NAMESPACE: Test
+  CLUSTER_MDM_NAMESPACE: Test
   DATABASE_ACCOUNT_NAME: marches-aro-eastus
