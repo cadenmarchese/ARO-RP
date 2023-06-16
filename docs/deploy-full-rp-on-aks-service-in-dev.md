@@ -120,7 +120,7 @@
         make publish-image-fluentbit
         ```
 
-    1. Update `kubernetes_resources/deployments.yaml` with the correct registry, image repository, and tag created above, so that the RP deployment can pull its image.
+    1. Update `kubernetes_resources/rp.yaml` with the correct registry, image repository, and tag created above, so that the RP deployment can pull its image.
 
     1. Authorize the AKS cluster to [pull images from your ACR](https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/cannot-pull-image-from-acr-to-aks-cluster)
 
@@ -245,7 +245,7 @@
     kubectl apply -f kubernetes_resources/namespaces.yaml
     kubectl apply -f kubernetes_resources/secrets.yaml
     kubectl apply -f kubernetes_resources/configmaps.yaml
-    kubectl apply -f kubernetes_resources/deployments.yaml
+    kubectl apply -f kubernetes_resources/rp.yaml
     kubectl apply -f kubernetes_resources/services.yaml
     ```
     
