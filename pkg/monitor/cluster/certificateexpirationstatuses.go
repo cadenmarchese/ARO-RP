@@ -5,9 +5,9 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/Azure/ARO-RP/pkg/operator"
@@ -29,13 +29,19 @@ func (mon *Monitor) emitCertificateExpirationStatuses(ctx context.Context) error
 	certs = append(certs, mdsdCert)
 
 	if dns.IsManagedDomain(mon.oc.Properties.ClusterProfile.Domain) {
-		infraID := mon.oc.Properties.InfraID
-		for _, secretName := range []string{infraID + "-ingress", infraID + "-apiserver"} {
-			certificate, err := mon.getCertificate(ctx, secretName, operator.Namespace, corev1.TLSCertKey)
-			if err != nil {
-				return err
+		managedCertificates, err := mon.cli.CoreV1().Secrets("openshift-azure-operator").List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+
+		for _, secret := range managedCertificates.Items {
+			if strings.HasSuffix(secret.Name, "-apiserver") || strings.HasSuffix(secret.Name, "-ingress") {
+				cert, err := mon.getCertificate(ctx, secret.Name, "openshift-azure-operator", "gcscert.pem")
+				if err != nil {
+					return err
+				}
+				certs = append(certs, cert)
 			}
-			certs = append(certs, certificate)
 		}
 	}
 
