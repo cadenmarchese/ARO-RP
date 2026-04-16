@@ -419,14 +419,18 @@ func TestBuildEtcdAnalysisJob(t *testing.T) {
 	if c.Image != etcdAnalysisImage {
 		t.Errorf("container.Image = %q, want %q", c.Image, etcdAnalysisImage)
 	}
-	wantCommand := []string{"/usr/local/bin/analyze-snapshot.sh"}
+	wantCommand := []string{"/bin/bash", "-c", etcdAnalysisScript}
 	if len(c.Command) != len(wantCommand) {
-		t.Errorf("container.Command = %v, want %v", c.Command, wantCommand)
+		t.Errorf("container.Command length = %d, want %d", len(c.Command), len(wantCommand))
 	} else {
-		for i, v := range wantCommand {
-			if c.Command[i] != v {
-				t.Errorf("container.Command[%d] = %q, want %q", i, c.Command[i], v)
-			}
+		if c.Command[0] != wantCommand[0] {
+			t.Errorf("container.Command[0] = %q, want %q", c.Command[0], wantCommand[0])
+		}
+		if c.Command[1] != wantCommand[1] {
+			t.Errorf("container.Command[1] = %q, want %q", c.Command[1], wantCommand[1])
+		}
+		if c.Command[2] != etcdAnalysisScript {
+			t.Errorf("container.Command[2] does not match embedded etcdAnalysisScript")
 		}
 	}
 	if len(c.Args) < 2 {

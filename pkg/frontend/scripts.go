@@ -10,3 +10,6 @@ var backupOrFixEtcd string
 
 //go:embed scripts/etcdkeycount.sh
 var etcdKeyCountScript string
+
+//go:embed scripts/etcdanalysis.sh
+var etcdAnalysisScript string

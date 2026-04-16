@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	etcdAnalysisImage        = "arosvc.azurecr.io/redhat_emp1/octosql-etcd:latest"
+	etcdAnalysisImage        = "arosvc.azurecr.io/ubi9/ubi-minimal:latest"
 	etcdDataDir              = "/var/lib/etcd"
 	etcdAnalysisSAPrefix     = "etcd-analysis-privileged"
 	etcdAnalysisSuffixLength = 8
@@ -175,8 +175,10 @@ func etcdAnalysisStream(ctx context.Context, log *logrus.Entry, k adminactions.K
 	runJobStream(ctx, log, k, job, nopWriteCloser{w}, defaultJobRetryDelay)
 }
 
-// buildEtcdAnalysisJob builds the Job that runs octosql-etcd against the snapshot.
+// buildEtcdAnalysisJob builds the Job that runs OctoSQL analysis against the snapshot.
 func buildEtcdAnalysisJob(vmName, filename, saName string) *batchv1.Job {
+	snapshotPath := "/snapshot/" + filename
+
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "etcd-analysis-" + utilrand.String(5),
@@ -196,10 +198,13 @@ func buildEtcdAnalysisJob(vmName, filename, saName string) *batchv1.Job {
 					},
 					Containers: []corev1.Container{
 						{
-							Name:    "analyzer",
-							Image:   etcdAnalysisImage,
-							Command: []string{"/usr/local/bin/analyze-snapshot.sh"},
-							Args:    []string{"--delete", "/snapshot/" + filename},
+							Name:  "analyzer",
+							Image: etcdAnalysisImage,
+							Command: []string{
+								"/bin/bash", "-c",
+								etcdAnalysisScript,
+							},
+							Args: []string{"--delete", snapshotPath},
 							SecurityContext: &corev1.SecurityContext{
 								Privileged: pointerutils.ToPtr(true),
 							},
