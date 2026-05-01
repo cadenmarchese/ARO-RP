@@ -106,9 +106,10 @@ kubernetescli, err := kubernetes.NewForConfig(restConfig)
 
 **AKS Cluster Connection:**
 - Uses existing `getAksShardKubeconfig()` function
-- Connects to `aro-aks-cluster-{shard:03d}` (same clusters where Hive runs)
+- **Connects to the same AKS clusters where Hive currently runs** (`aro-aks-cluster-{shard:03d}`)
 - Retrieves admin credentials via `ListClusterAdminCredentials()`
 - Caches credentials in liveconfig with RWMutex
+- **No new infrastructure required** - reuses existing AKS clusters and client setup from Hive
 
 ### 4. Monitoring and Error Handling
 
@@ -136,6 +137,9 @@ Adapt `pkg/hive/failure/handler.go` patterns to parse installer logs and map to 
 - `AzureKeyBasedAuthenticationNotPermitted`
 
 Return structured CloudError for user-facing error messages.
+
+**Log Parsing Migration:**
+The RP already parses install logs from Hive's output via regex matching. This logic needs to be reimplemented directly in `pkg/aksinstall` to parse logs from the provision pod instead of from Hive's nested output. Since we'll be reading installer logs directly (not through Hive's wrapper), this change will **simplify the parsing logic** - no need to extract installer output from Hive's formatting, just read the pod logs directly.
 
 **Cleanup Strategy:**
 - **On success:** Delete pod, delete all secrets, delete namespace
@@ -179,11 +183,19 @@ func (m *manager) runAKSInstaller(ctx context.Context) error {
 **Modify `bootstrap()` method** (around line 440-470):
 - **Remove:** `hiveCreateNamespace`, `runHiveInstaller`, `hiveClusterInstallationComplete` steps
 - **Remove:** `hiveEnsureResources`, `hiveClusterDeploymentReady` steps (adoption flow)
-- **Replace with:** Direct call to `runAKSInstaller` with same pattern as `runPodmanInstaller`
+- **Replace with:** Environment-based routing to enable gradual rollout
 
-**Before:**
+**Implementation with Environment Toggle:**
 ```go
-if m.installViaHive {
+// Check environment variable to enable AKS installer mode
+// This allows testing in local dev, INT, and canary before full rollout
+if m.env.DeploymentMode() == deployment.Development || m.env.FeatureIsSet(env.FeatureUseAKSInstaller) {
+    s = append(s,
+        steps.Action(m.runAKSInstaller),
+        steps.Action(m.generateKubeconfigs),
+    )
+} else if m.installViaHive {
+    // Legacy Hive path (to be removed after validation)
     s = append(s,
         steps.Action(m.hiveCreateNamespace),
         steps.Action(m.runHiveInstaller),
@@ -193,14 +205,13 @@ if m.installViaHive {
 }
 ```
 
-**After:**
-```go
-// All cluster installations now use AKS direct
-s = append(s,
-    steps.Action(m.runAKSInstaller),
-    steps.Action(m.generateKubeconfigs),
-)
-```
+**Feature Flag:**
+- Add `FeatureUseAKSInstaller` to `pkg/env/env.go`
+- Enable in local development mode by default
+- Enable in INT/canary via environment variable for testing
+- Once validated, remove Hive path and feature flag entirely
+
+This approach allows safe testing in controlled environments before full rollout.
 
 ### 6. Complete Hive Removal
 
@@ -315,6 +326,34 @@ m.emitGauge("aksinstall.pod.phase", 1, map[string]string{"phase": podPhase})
 
 This ensures we have equal or better observability compared to Hive monitoring, but during installation rather than as periodic monitoring.
 
+### 9. Alerting and Incident Automation
+
+**Alerting Updates:**
+Our existing Hive alerting monitors pods in the AKS clusters where Hive runs. Since the new installer pods will run in the **same AKS clusters**, the alerting infrastructure requires minimal changes:
+- **Alert queries need updated namespace filters**: Change from monitoring Hive-managed namespaces to monitoring `aro-*` namespaces
+- **Alert names may need updates**: Rename from "Hive installer failure" to "ARO installer failure" for clarity
+- No infrastructure changes required - already monitoring non-Hive namespaced pods in these AKS clusters
+
+**Incident Automation Updates:**
+The automation between alert firing and incident creation currently assumes:
+- Installer logs are nested within Hive's output format
+- Specific Hive metadata is available in logs
+- ClusterDeployment status fields exist
+
+**Changes Required:**
+1. **Log query simplification**: Queries become simpler since installer output is direct (not nested in Hive formatting)
+2. **Remove Hive-specific fields**: Stop querying ClusterDeployment status, Hive conditions, etc.
+3. **Update log parsing**: Read pod logs directly from `aro-{docID}` namespaces instead of from Hive controller logs
+4. **Preserve correlation data**: Ensure pod labels/annotations include request IDs, client principal, subscription ID for incident routing
+
+**Example Query Change:**
+```
+Before: kubectl logs -n hive hive-clustersync-0 | grep "cluster-{uuid}" | extract installer output
+After:  kubectl logs -n aro-{uuid} installer-{uuid} | direct installer output
+```
+
+The automation becomes **simpler and more reliable** since we eliminate the indirection through Hive's log aggregation.
+
 ## Critical Files
 
 ### Files to Create:
@@ -327,14 +366,17 @@ This ensures we have equal or better observability compared to Hive monitoring, 
 7. `pkg/aksinstall/metrics.go` - Metrics helper methods (emitGauge, emitFloat)
 
 ### Files to Modify:
-7. `pkg/cluster/install.go` - Add `runAKSInstaller()`, modify `bootstrap()` to remove Hive paths
+7. `pkg/cluster/install.go` - Add `runAKSInstaller()`, modify `bootstrap()` to add environment-based routing
 8. `pkg/cluster/cluster.go` - Remove `hiveClusterManager` field, add `liveConfig` if not present
 9. `pkg/backend/openshiftcluster.go` - Remove Hive client creation
 10. `pkg/monitor/monitor.go` - Remove Hive monitor builder
 11. `pkg/frontend/frontend.go` - Remove SyncSet admin API routes and hiveSyncSetManager field
 12. `pkg/util/liveconfig/hive.go` - Remove Hive feature flags, optionally rename `HiveRestConfig`
-13. `go.mod` - Remove Hive dependencies
-14. `pkg/api/go.mod` - Remove Hive dependencies if present
+13. `pkg/env/env.go` - Add `FeatureUseAKSInstaller` feature flag
+14. `go.mod` - Remove Hive dependencies (after full rollout)
+15. `pkg/api/go.mod` - Remove Hive dependencies if present (after full rollout)
+16. **Alerting configurations** - Update namespace filters from Hive namespaces to `aro-*` namespaces
+17. **Incident automation queries** - Simplify log extraction to read directly from installer pods
 
 ### Files to Delete:
 15. `pkg/hive/*.go` - All files in hive package
@@ -408,7 +450,12 @@ After implementation, verify the changes work correctly:
 
 **Risk 3: Direct Replacement (No Gradual Rollout)**
 - Impact: All new clusters immediately use new code path, higher risk if bugs exist
-- Mitigation: Thorough testing in dev/int, fast rollback capability, comprehensive error handling
+- Mitigation: **Environment-based feature flag** (`FeatureUseAKSInstaller`) enables gradual rollout:
+  - Enabled in local development by default for testing
+  - Enabled in INT environment for integration testing
+  - Enabled in canary/production regions for controlled rollout
+  - Fast rollback by disabling feature flag if issues arise
+  - Thorough testing at each stage before broader rollout
 
 ## Out of Scope
 
