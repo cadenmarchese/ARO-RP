@@ -679,10 +679,6 @@ var (
 				ActionId:       "Microsoft.Network/virtualNetworks/subnets/read",
 				AccessDecision: client.Allowed,
 			},
-			{
-				ActionId:       "Microsoft.Network/virtualNetworks/subnets/write",
-				AccessDecision: client.Allowed,
-			},
 		},
 	}
 
@@ -713,10 +709,6 @@ var (
 				ActionId:       "Microsoft.Network/virtualNetworks/subnets/read",
 				AccessDecision: client.NotAllowed,
 			},
-			{
-				ActionId:       "Microsoft.Network/virtualNetworks/subnets/write",
-				AccessDecision: client.Allowed,
-			},
 		},
 	}
 
@@ -734,17 +726,13 @@ var (
 		},
 	}
 
-	invalidSubnetsAuthorizationDecisionsMissingWrite = client.AuthorizationDecisionResponse{
+	invalidSubnetsAuthorizationDecisionsMissingRead = client.AuthorizationDecisionResponse{
 		Value: []client.AuthorizationDecision{
 			{
 				ActionId:       "Microsoft.Network/virtualNetworks/subnets/join/action",
 				AccessDecision: client.Allowed,
 			},
-			{
-				ActionId:       "Microsoft.Network/virtualNetworks/subnets/read",
-				AccessDecision: client.Allowed,
-			},
-			// deliberately missing subnets write
+			// deliberately missing subnets read
 		},
 	}
 )
@@ -1040,7 +1028,7 @@ func TestValidateSubnetPermissions(t *testing.T) {
 			wantErr: "400: InvalidWorkloadIdentityPermissions: : The Dummy platform managed identity does not have required permissions on subnet '" + masterSubnet + "'.",
 		},
 		{
-			name: "fail: CSP validation for CSP cluster - CheckAccess Return less entries than requested",
+			name: "fail: CSP validation for CSP cluster - CheckAccess returns fewer entries than requested",
 			mocks: func(env *mock_env.MockInterface, tokenCred *mock_azcore.MockTokenCredential, pdpClient *mock_checkaccess.MockRemotePDPClient, cancel context.CancelFunc) {
 				mockTokenCredential(tokenCred)
 				env.EXPECT().Environment().AnyTimes().Return(&azureclient.PublicCloud)
@@ -1051,7 +1039,7 @@ func TestValidateSubnetPermissions(t *testing.T) {
 					Do(func(arg0, arg1 interface{}) {
 						cancel()
 					}).
-					Return(&invalidSubnetsAuthorizationDecisionsMissingWrite, nil)
+					Return(&invalidSubnetsAuthorizationDecisionsMissingRead, nil)
 			},
 			wantErr: "400: InvalidServicePrincipalPermissions: : The cluster service principal (Application ID: fff51942-b1f9-4119-9453-aaa922259eb7) does not have required permissions on subnet '" + masterSubnet + "'.",
 		},

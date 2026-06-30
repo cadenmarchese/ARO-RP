@@ -363,7 +363,6 @@ func (dv *dynamic) validateSubnetPermissions(ctx context.Context, s Subnet) erro
 	operatorName, err := dv.validateActions(ctx, &subnetr, []string{
 		"Microsoft.Network/virtualNetworks/subnets/join/action",
 		"Microsoft.Network/virtualNetworks/subnets/read",
-		"Microsoft.Network/virtualNetworks/subnets/write",
 	})
 
 	var noPermissionsErr *api.CloudError
