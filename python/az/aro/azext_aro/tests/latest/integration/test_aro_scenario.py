@@ -67,11 +67,11 @@ class AroScenarioTests(ScenarioTest):
         self.cmd('network vnet subnet update -g {rg} --vnet-name dev-vnet -n {master_subnet} --private-link-service-network-policies Disabled')
 
         # aro validate
-        with mock.patch('azure.cli.command_modules.aro._rbac._gen_uuid', side_effect=self.create_guid):
+        with mock.patch('azext_aro._rbac._gen_uuid', side_effect=self.create_guid):
             self.cmd('aro validate -g {rg} -n {name} --client-id {aro_csp} --client-secret {aro_csp_pass} --master-subnet {master_subnet_resource} --worker-subnet {worker_subnet_resource} --subscription {subscription}')
 
         # aro create
-        with mock.patch('azure.cli.command_modules.aro._rbac._gen_uuid', side_effect=self.create_guid):
+        with mock.patch('azext_aro._rbac._gen_uuid', side_effect=self.create_guid):
             self.cmd('aro create -g {rg} -n {name} --client-id {aro_csp} --client-secret {aro_csp_pass} --master-subnet {master_subnet_resource} --worker-subnet {worker_subnet_resource} --subscription {subscription} --tags test=create', checks=[
                 self.check('tags.test', 'create'),
                 self.check('name', '{name}'),

@@ -21,6 +21,10 @@ ROLE_READER = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
 logger = get_logger(__name__)
 
 
+def _gen_uuid():
+    return uuid.uuid4()
+
+
 def create_identity(cmd, location, group, name) -> typing.Any:
     create = _create_identity(cli_ctx=cmd.cli_ctx)
 
@@ -34,7 +38,7 @@ def create_identity(cmd, location, group, name) -> typing.Any:
 
 def create_role_assignment(cli_ctx, principal_id, role_definition_id, scope, name=None) -> typing.Any | None:
     if not name:
-        name = str(uuid.uuid4())
+        name = str(_gen_uuid())
 
     create = _role_assignment_create(cli_ctx=cli_ctx)
     try:
